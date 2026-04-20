@@ -94,17 +94,16 @@ net/http.(*Server).Serve(0xc20806c780, 0x910c88, 0xc20803e168, 0x0, 0x0)
 	/0/c/go/src/pkg/net/http/server.go:1698 +0x91
 `
 
-var result = []StackFrame{
-	StackFrame{File: "/0/c/go/src/pkg/runtime/panic.c", LineNumber: 279, Name: "panic", Package: "runtime"},
-	StackFrame{File: "/0/go/src/github.com/loopj/bugsnag-example-apps/go/revelapp/app/controllers/app.go", LineNumber: 13, Name: "func.001", Package: "github.com/loopj/bugsnag-example-apps/go/revelapp/app/controllers"},
-	StackFrame{File: "/0/c/go/src/pkg/net/http/server.go", LineNumber: 1698, Name: "(*Server).Serve", Package: "net/http"},
+var expectedFrames = []StackFrame{
+	{File: "/0/c/go/src/pkg/runtime/panic.c", LineNumber: 279, Name: "panic", Package: "runtime"},
+	{File: "/0/go/src/github.com/loopj/bugsnag-example-apps/go/revelapp/app/controllers/app.go", LineNumber: 13, Name: "func.001", Package: "github.com/loopj/bugsnag-example-apps/go/revelapp/app/controllers"},
+	{File: "/0/c/go/src/pkg/net/http/server.go", LineNumber: 1698, Name: "(*Server).Serve", Package: "net/http"},
 }
 
-var resultCreatedBy = append(result,
+var expectedFramesCreatedBy = append(expectedFrames,
 	StackFrame{File: "/0/go/src/github.com/loopj/bugsnag-example-apps/go/revelapp/app/controllers/app.go", LineNumber: 14, Name: "App.Index", Package: "github.com/loopj/bugsnag-example-apps/go/revelapp/app/controllers", ProgramCounter: 0x0})
 
 func TestParsePanic(t *testing.T) {
-
 	todo := map[string]string{
 		"createdBy":     createdBy,
 		"normalSplit":   normalSplit,
@@ -112,31 +111,31 @@ func TestParsePanic(t *testing.T) {
 	}
 
 	for key, val := range todo {
-		Err, err := ParsePanic(val)
+		parsedErr, err := ParsePanic(val)
 
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if Err.TypeName() != "panic" {
-			t.Errorf("Wrong type: %s", Err.TypeName())
+		if parsedErr.TypeName() != "panic" {
+			t.Errorf("Wrong type: %s", parsedErr.TypeName())
 		}
 
-		if Err.Error() != "hello!" {
-			t.Errorf("Wrong message: %s", Err.TypeName())
+		if parsedErr.Error() != "hello!" {
+			t.Errorf("Wrong message: %s", parsedErr.TypeName())
 		}
 
-		if Err.StackFrames()[0].Func() != nil {
+		if parsedErr.StackFrames()[0].Func() != nil {
 			t.Errorf("Somehow managed to find a func...")
 		}
 
-		result := result
+		want := expectedFrames
 		if key == "createdBy" {
-			result = resultCreatedBy
+			want = expectedFramesCreatedBy
 		}
 
-		if !reflect.DeepEqual(Err.StackFrames(), result) {
-			t.Errorf("Wrong stack for %s: %#v", key, Err.StackFrames())
+		if !reflect.DeepEqual(parsedErr.StackFrames(), want) {
+			t.Errorf("Wrong stack for %s: %#v", key, parsedErr.StackFrames())
 		}
 	}
 }

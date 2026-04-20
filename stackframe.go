@@ -3,15 +3,15 @@ package errors
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 )
 
-// A StackFrame contains all necessary information about to generate a line
-// in a callstack.
+// StackFrame contains all necessary information to generate a line in a
+// call stack trace.
 type StackFrame struct {
 	// File is the path to the file containing this ProgramCounter.
 	File string
@@ -23,50 +23,67 @@ type StackFrame struct {
 	Package string
 	// ProgramCounter is the underlying program counter.
 	ProgramCounter uintptr
+
+	fn *runtime.Func // cached; avoids repeated FuncForPC lookups
 }
 
 // NewStackFrame populates a stack frame object from the program counter.
-func NewStackFrame(pc uintptr) (frame StackFrame) {
-
-	frame = StackFrame{ProgramCounter: pc}
-	if frame.Func() == nil {
-		return
+func NewStackFrame(pc uintptr) StackFrame {
+	f := StackFrame{ProgramCounter: pc}
+	f.fn = runtime.FuncForPC(pc)
+	if f.fn == nil {
+		return f
 	}
-	frame.Package, frame.Name = packageAndName(frame.Func())
+	f.Package, f.Name = packageAndName(f.fn)
 
-	// pc -1 because the program counters we use are usually return addresses,
-	// and we want to show the line that corresponds to the function call
-	frame.File, frame.LineNumber = frame.Func().FileLine(pc - 1)
-	return
-
+	// pc-1 because the program counters we use are usually return addresses,
+	// and we want to show the line that corresponds to the function call.
+	f.File, f.LineNumber = f.fn.FileLine(pc - 1)
+	return f
 }
 
 // Func returns the function that contained this frame.
-func (frame *StackFrame) Func() *runtime.Func {
-	if frame.ProgramCounter == 0 {
+func (f *StackFrame) Func() *runtime.Func {
+	if f.fn != nil {
+		return f.fn
+	}
+	if f.ProgramCounter == 0 {
 		return nil
 	}
-	return runtime.FuncForPC(frame.ProgramCounter)
+	f.fn = runtime.FuncForPC(f.ProgramCounter)
+	return f.fn
 }
 
-// String returns the stackframe formatted in the same way as go does
-// in runtime/debug.Stack()
-func (frame *StackFrame) String() string {
+// String returns the stack frame formatted in the same way as go does
+// in runtime/debug.Stack().
+func (f *StackFrame) String() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s:%d (0x%x)\n", frame.File, frame.LineNumber, frame.ProgramCounter)
+	b.Grow(len(f.File) + 32 + len(f.Name) + 64)
 
-	source, err := frame.sourceLine()
+	b.WriteString(f.File)
+	b.WriteByte(':')
+	b.WriteString(strconv.Itoa(f.LineNumber))
+	b.WriteString(" (0x")
+	b.WriteString(strconv.FormatUint(uint64(f.ProgramCounter), 16))
+	b.WriteString(")\n")
+
+	source, err := f.sourceLine()
 	if err != nil {
 		return b.String()
 	}
 
-	fmt.Fprintf(&b, "\t%s: %s\n", frame.Name, source)
+	b.WriteByte('\t')
+	b.WriteString(f.Name)
+	b.WriteString(": ")
+	b.WriteString(source)
+	b.WriteByte('\n')
 	return b.String()
 }
 
-// SourceLine gets the line of code (from File and Line) of the original source if possible.
-func (frame *StackFrame) SourceLine() (string, error) {
-	source, err := frame.sourceLine()
+// SourceLine gets the line of code (from File and LineNumber) of the
+// original source if possible.
+func (f *StackFrame) SourceLine() (string, error) {
+	source, err := f.sourceLine()
 	if err != nil {
 		return source, Wrap(err, 1)
 	}
@@ -80,25 +97,24 @@ type sourceLineResult struct {
 	err   error
 }
 
-func (frame *StackFrame) sourceLine() (string, error) {
-	if frame.LineNumber <= 0 {
+func (f *StackFrame) sourceLine() (string, error) {
+	if f.LineNumber <= 0 {
 		return "???", nil
 	}
 
-	key := frame.File
+	key := f.File
 	if cached, ok := sourceLineCache.Load(key); ok {
 		result := cached.(*sourceLineResult)
 		if result.err != nil {
 			return "", result.err
 		}
-		lines := result.lines
-		if frame.LineNumber >= 1 && frame.LineNumber <= len(lines) {
-			return lines[frame.LineNumber-1], nil
+		if f.LineNumber >= 1 && f.LineNumber <= len(result.lines) {
+			return result.lines[f.LineNumber-1], nil
 		}
 		return "???", nil
 	}
 
-	file, err := os.Open(frame.File)
+	file, err := os.Open(f.File)
 	if err != nil {
 		sourceLineCache.Store(key, &sourceLineResult{err: err})
 		return "", err
@@ -117,18 +133,20 @@ func (frame *StackFrame) sourceLine() (string, error) {
 
 	sourceLineCache.Store(key, &sourceLineResult{lines: lines})
 
-	if frame.LineNumber >= 1 && frame.LineNumber <= len(lines) {
-		return lines[frame.LineNumber-1], nil
+	if f.LineNumber >= 1 && f.LineNumber <= len(lines) {
+		return lines[f.LineNumber-1], nil
 	}
 	return "???", nil
 }
 
+// packageAndName splits a runtime.Func's fully-qualified name into the
+// package path and the short function name.
 func packageAndName(fn *runtime.Func) (string, string) {
 	name := fn.Name()
 	pkg := ""
 
-	// The name includes the path name to the package, which is unnecessary
-	// since the file name is already included.  Plus, it has center dots.
+	// The name includes the path to the package, which is unnecessary
+	// since the file name is already included. Plus, it has center dots.
 	// That is, we see
 	//
 	//	runtime/debug.*T·ptrmethod
@@ -137,7 +155,7 @@ func packageAndName(fn *runtime.Func) (string, string) {
 	//
 	//	*T.ptrmethod
 	//
-	// Since the package path might contains dots (e.g. code.google.com/...),
+	// Since the package path might contain dots (e.g. code.google.com/...),
 	// we first remove the path prefix if there is one.
 	if lastslash := strings.LastIndex(name, "/"); lastslash >= 0 {
 		pkg += name[:lastslash] + "/"
