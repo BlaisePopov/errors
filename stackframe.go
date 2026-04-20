@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // A StackFrame contains all necessary information about to generate a line
@@ -72,29 +73,53 @@ func (frame *StackFrame) SourceLine() (string, error) {
 	return source, err
 }
 
+var sourceLineCache sync.Map
+
+type sourceLineResult struct {
+	lines []string
+	err   error
+}
+
 func (frame *StackFrame) sourceLine() (string, error) {
 	if frame.LineNumber <= 0 {
 		return "???", nil
 	}
 
+	key := frame.File
+	if cached, ok := sourceLineCache.Load(key); ok {
+		result := cached.(*sourceLineResult)
+		if result.err != nil {
+			return "", result.err
+		}
+		lines := result.lines
+		if frame.LineNumber >= 1 && frame.LineNumber <= len(lines) {
+			return lines[frame.LineNumber-1], nil
+		}
+		return "???", nil
+	}
+
 	file, err := os.Open(frame.File)
 	if err != nil {
+		sourceLineCache.Store(key, &sourceLineResult{err: err})
 		return "", err
 	}
 	defer file.Close()
 
+	var lines []string
 	scanner := bufio.NewScanner(file)
-	currentLine := 1
 	for scanner.Scan() {
-		if currentLine == frame.LineNumber {
-			return string(bytes.Trim(scanner.Bytes(), " \t")), nil
-		}
-		currentLine++
+		lines = append(lines, string(bytes.Trim(scanner.Bytes(), " \t")))
 	}
 	if err := scanner.Err(); err != nil {
+		sourceLineCache.Store(key, &sourceLineResult{err: err})
 		return "", err
 	}
 
+	sourceLineCache.Store(key, &sourceLineResult{lines: lines})
+
+	if frame.LineNumber >= 1 && frame.LineNumber <= len(lines) {
+		return lines[frame.LineNumber-1], nil
+	}
 	return "???", nil
 }
 

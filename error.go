@@ -53,7 +53,7 @@ import (
 // MaxStackDepth is the maximum number of stackframes on any error.
 // It is safe to read concurrently. If modified, do so before calling
 // New, Wrap, or WrapPrefix for the first time.
-var MaxStackDepth = 50
+var MaxStackDepth = 32
 
 var stackBufPool = sync.Pool{
 	New: func() any {
@@ -65,7 +65,6 @@ var stackBufPool = sync.Pool{
 // Error is an error with an attached stacktrace. It can be used
 // wherever the builtin error interface is expected.
 type Error struct {
-	// Err is the underlying error wrapped by this Error.
 	Err    error
 	stack  []uintptr
 	frames []StackFrame
@@ -177,14 +176,19 @@ func (err *Error) Error() string {
 
 // Stack returns the callstack formatted the same way that go does
 // in runtime/debug.Stack()
-func (err *Error) Stack() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, len(err.stack)*128))
+var stackCache sync.Map
 
+func (err *Error) Stack() []byte {
+	if cached, ok := stackCache.Load(err); ok {
+		return cached.([]byte)
+	}
+	buf := bytes.NewBuffer(make([]byte, 0, len(err.stack)*128))
 	for _, frame := range err.StackFrames() {
 		buf.WriteString(frame.String())
 	}
-
-	return buf.Bytes()
+	b := buf.Bytes()
+	stackCache.Store(err, b)
+	return b
 }
 
 // Callers returns the stack of callers.
