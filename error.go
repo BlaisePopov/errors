@@ -55,11 +55,19 @@ import (
 // New, Wrap, or WrapPrefix for the first time.
 var MaxStackDepth = 32
 
-var stackBufPool = sync.Pool{
-	New: func() any {
-		buf := make([]uintptr, MaxStackDepth)
-		return &buf
-	},
+func captureStack(skip, depth int) []uintptr {
+	if depth <= 64 {
+		var buf [64]uintptr
+		length := runtime.Callers(skip+3, buf[:depth])
+		stack := make([]uintptr, length)
+		copy(stack, buf[:length])
+		return stack
+	}
+	buf := make([]uintptr, depth)
+	length := runtime.Callers(skip+3, buf)
+	stack := make([]uintptr, length)
+	copy(stack, buf[:length])
+	return stack
 }
 
 // Error is an error with an attached stacktrace. It can be used
@@ -89,20 +97,17 @@ func New(e any) *Error {
 		err = fmt.Errorf("%v", e)
 	}
 
-	bufPtr := stackBufPool.Get().(*[]uintptr)
-	defer stackBufPool.Put(bufPtr)
-	length := runtime.Callers(2, (*bufPtr)[:])
-	stack := make([]uintptr, length)
-	copy(stack, (*bufPtr)[:length])
+	stack := captureStack(0, MaxStackDepth)
 
 	var file string
 	var line int
 	var fnName string
-	if length > 0 {
-		frame, _ := runtime.CallersFrames(stack[:1]).Next()
-		file = frame.File
-		line = frame.Line
-		fnName = frame.Function
+	if len(stack) > 0 {
+		fn := runtime.FuncForPC(stack[0] - 1)
+		if fn != nil {
+			file, line = fn.FileLine(stack[0] - 1)
+			fnName = fn.Name()
+		}
 	}
 
 	return &Error{
@@ -137,11 +142,7 @@ func Wrap(e any, skip int) *Error {
 		err = fmt.Errorf("%v", e)
 	}
 
-	bufPtr := stackBufPool.Get().(*[]uintptr)
-	defer stackBufPool.Put(bufPtr)
-	length := runtime.Callers(2+skip, (*bufPtr)[:])
-	stack := make([]uintptr, length)
-	copy(stack, (*bufPtr)[:length])
+	stack := captureStack(skip, MaxStackDepth)
 	return &Error{
 		Err:   err,
 		stack: stack,
@@ -178,10 +179,11 @@ func WrapPrefix(e any, prefix string, skip int) *Error {
 	var line int
 	var fnName string
 	if n > 0 {
-		frame, _ := runtime.CallersFrames(rpc[:]).Next()
-		file = frame.File
-		line = frame.Line
-		fnName = frame.Function
+		fn := runtime.FuncForPC(rpc[0] - 1)
+		if fn != nil {
+			file, line = fn.FileLine(rpc[0] - 1)
+			fnName = fn.Name()
+		}
 	}
 
 	return &Error{
