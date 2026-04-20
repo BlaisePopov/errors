@@ -7,6 +7,15 @@
 // Go error interface, so you can use this library interchangably
 // with code that is expecting a normal error return.
 //
+// This package is a drop-in replacement for the standard library
+// "errors" package. You can swap imports:
+//
+//	import "errors"        →  import "github.com/go-errors/errors"
+//
+// The New function matches the stdlib signature exactly.
+// Additional functions like Wrap, WrapPrefix, Errorf, From, and
+// ParsePanic provide extra functionality beyond the stdlib.
+//
 // For example:
 //
 //	package crashy
@@ -16,7 +25,7 @@
 //	var Crashed = errors.Errorf("oh dear")
 //
 //	func Crash() error {
-//	    return errors.New(Crashed)
+//	    return errors.Wrap(Crashed, 0)
 //	}
 //
 // This can be called as follows:
@@ -83,11 +92,42 @@ type Error struct {
 	locFunc string
 }
 
-// New makes an Error from the given value. If that value is already an
-// error then it will be used directly, if not, it will be passed to
-// fmt.Errorf("%v"). The stacktrace will point to the line of code that
-// called New.
-func New(e any) *Error {
+type msgError struct {
+	msg string
+}
+
+func (e *msgError) Error() string { return e.msg }
+
+// New returns an error that formats as the given text. It is a drop-in
+// replacement for the standard library errors.New and additionally records
+// a stacktrace at the point it was called.
+func New(text string) error {
+	stack := captureStack(0, MaxStackDepth)
+
+	var file string
+	var line int
+	var fnName string
+	if len(stack) > 0 {
+		fn := runtime.FuncForPC(stack[0] - 1)
+		if fn != nil {
+			file, line = fn.FileLine(stack[0] - 1)
+			fnName = fn.Name()
+		}
+	}
+
+	return &Error{
+		Err:     &msgError{msg: text},
+		stack:   stack,
+		locFile: file,
+		locLine: line,
+		locFunc: fnName,
+	}
+}
+
+// From wraps the given value as an *Error with a stacktrace. If the value is
+// already an error it is used directly; otherwise it is converted via
+// fmt.Errorf("%v"). The stacktrace points to the line of code that called From.
+func From(e any) *Error {
 	var err error
 
 	switch e := e.(type) {
@@ -119,27 +159,17 @@ func New(e any) *Error {
 	}
 }
 
-// Wrap makes an Error from the given value. If that value is already an *Error
-// it will not be wrapped and instead will be returned without modification. If
-// that value is already an error then it will be used directly and wrapped.
-// Otherwise, the value will be passed to fmt.Errorf("%v") and then wrapped. To
-// explicitly wrap an *Error with a new stacktrace use Errorf. The skip
-// parameter indicates how far up the stack to start the stacktrace. 0 is from
-// the current call, 1 from its caller, etc.
-func Wrap(e any, skip int) *Error {
-	if e == nil {
+// Wrap wraps the given error, capturing a stacktrace at the call site. If err
+// is already an *Error it is returned without modification. The skip parameter
+// indicates how far up the stack to start the stacktrace: 0 is from the
+// current call, 1 from its caller, etc.
+func Wrap(err error, skip int) error {
+	if err == nil {
 		return nil
 	}
 
-	var err error
-
-	switch e := e.(type) {
-	case *Error:
+	if e, ok := err.(*Error); ok {
 		return e
-	case error:
-		err = e
-	default:
-		err = fmt.Errorf("%v", e)
 	}
 
 	stack := captureStack(skip, MaxStackDepth)
@@ -149,28 +179,13 @@ func Wrap(e any, skip int) *Error {
 	}
 }
 
-// WrapPrefix makes an Error from the given value. If that value is already an
-// *Error it will not be wrapped and instead will be returned without
-// modification. If that value is already an error then it will be used
-// directly and wrapped.  Otherwise, the value will be passed to
-// fmt.Errorf("%v") and then wrapped. To explicitly wrap an *Error with a new
-// stacktrace use Errorf. The prefix parameter is used to add a prefix to the
-// error message when calling Error(). The skip parameter indicates how far up
-// the stack to start the stacktrace. 0 is from the current call, 1 from its
-// caller, etc.
-func WrapPrefix(e any, prefix string, skip int) *Error {
-	if e == nil {
+// WrapPrefix wraps the given error with a prefix string that is prepended to
+// the error message. If err is already an *Error it is used as the inner error
+// (not returned as-is). The skip parameter indicates how far up the stack to
+// start the stacktrace: 0 is from the current call, 1 from its caller, etc.
+func WrapPrefix(err error, prefix string, skip int) error {
+	if err == nil {
 		return nil
-	}
-
-	var inner error
-	switch v := e.(type) {
-	case *Error:
-		inner = v
-	case error:
-		inner = v
-	default:
-		inner = fmt.Errorf("%v", v)
 	}
 
 	var rpc [1]uintptr
@@ -187,7 +202,7 @@ func WrapPrefix(e any, prefix string, skip int) *Error {
 	}
 
 	return &Error{
-		Err:     inner,
+		Err:     err,
 		prefix:  prefix,
 		locFile: file,
 		locLine: line,
@@ -195,10 +210,10 @@ func WrapPrefix(e any, prefix string, skip int) *Error {
 	}
 }
 
-// Errorf creates a new error with the given message. You can use it
-// as a drop-in replacement for fmt.Errorf() to provide descriptive
+// Errorf creates a new error with the given message and a stacktrace. You can
+// use it as a drop-in replacement for fmt.Errorf() to provide descriptive
 // errors in return values.
-func Errorf(format string, a ...any) *Error {
+func Errorf(format string, a ...any) error {
 	return Wrap(fmt.Errorf(format, a...), 1)
 }
 

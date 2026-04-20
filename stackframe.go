@@ -68,7 +68,7 @@ func (frame *StackFrame) String() string {
 func (frame *StackFrame) SourceLine() (string, error) {
 	source, err := frame.sourceLine()
 	if err != nil {
-		return source, New(err)
+		return source, Wrap(err, 1)
 	}
 	return source, err
 }

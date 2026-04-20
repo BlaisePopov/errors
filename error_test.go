@@ -20,7 +20,7 @@ func BenchmarkStackFormat(b *testing.B) {
 					b.Fatal(err)
 				}
 
-				e := Errorf("hi")
+				e := Errorf("hi").(*Error)
 				_ = string(e.Stack())
 			}()
 
@@ -60,7 +60,7 @@ func TestStackFormat(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		e, expected := Errorf("hi"), callers()
+		e, expected := Errorf("hi").(*Error), callers()
 
 		bs := [][]uintptr{e.stack, expected}
 
@@ -92,7 +92,7 @@ func TestSkipWorks(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		bs := [][]uintptr{Wrap("hi", 2).stack, callersSkip(2)}
+		bs := [][]uintptr{Wrap(fmt.Errorf("hi"), 2).(*Error).stack, callersSkip(2)}
 
 		if err := compareStacks(bs[0], bs[1]); err != nil {
 			t.Errorf("Stack didn't match")
@@ -111,20 +111,21 @@ func TestNew(t *testing.T) {
 		t.Errorf("Wrong message")
 	}
 
-	err = New(fmt.Errorf("foo"))
+	fromErr := From(fmt.Errorf("foo"))
 
-	if err.Error() != "foo" {
+	if fromErr.Error() != "foo" {
 		t.Errorf("Wrong message")
 	}
 
-	bs := [][]uintptr{New("foo").stack, callers()}
+	bs := [][]uintptr{New("foo").(*Error).stack, callers()}
 
 	if err := compareStacks(bs[0], bs[1]); err != nil {
 		t.Errorf("Stack didn't match")
 		t.Error(err.Error())
 	}
 
-	if err.ErrorStack() != err.TypeName()+" "+err.Error()+"\n"+string(err.Stack()) {
+	e := err.(*Error)
+	if e.ErrorStack() != e.TypeName()+" "+e.Error()+"\n"+string(e.Stack()) {
 		t.Errorf("ErrorStack is in the wrong format")
 	}
 }
@@ -139,12 +140,12 @@ func TestIs(t *testing.T) {
 		t.Errorf("io.EOF is not io.EOF")
 	}
 
-	if !Is(io.EOF, New(io.EOF)) {
-		t.Errorf("io.EOF is not New(io.EOF)")
+	if !Is(io.EOF, From(io.EOF)) {
+		t.Errorf("io.EOF is not From(io.EOF)")
 	}
 
-	if !Is(New(io.EOF), New(io.EOF)) {
-		t.Errorf("New(io.EOF) is not New(io.EOF)")
+	if !Is(From(io.EOF), From(io.EOF)) {
+		t.Errorf("From(io.EOF) is not From(io.EOF)")
 	}
 
 	if Is(io.EOF, fmt.Errorf("io.EOF")) {
@@ -155,7 +156,7 @@ func TestIs(t *testing.T) {
 func TestWrapError(t *testing.T) {
 
 	e := func() error {
-		return Wrap("hi", 1)
+		return Wrap(fmt.Errorf("hi"), 1)
 	}()
 
 	if e.Error() != "hi" {
@@ -178,7 +179,7 @@ func TestWrapError(t *testing.T) {
 func TestWrapPrefixError(t *testing.T) {
 
 	e := func() error {
-		return WrapPrefix("hi", "prefix", 1)
+		return WrapPrefix(fmt.Errorf("hi"), "prefix", 1)
 	}()
 
 	if e.Error() != "prefix: hi" {
@@ -190,10 +191,11 @@ func TestWrapPrefixError(t *testing.T) {
 	}
 
 	prefixed := WrapPrefix(e, "prefix", 0)
+	prefixedErr := prefixed.(*Error)
 	original := e.(*Error)
 
-	if prefixed.Err != original || prefixed.Error() != "prefix: prefix: hi" {
-		t.Errorf("Constructor with an Error failed: got Err=%v, Error=%q", prefixed.Err, prefixed.Error())
+	if prefixedErr.Err != original || prefixed.Error() != "prefix: prefix: hi" {
+		t.Errorf("Constructor with an Error failed: got Err=%v, Error=%q", prefixedErr.Err, prefixed.Error())
 	}
 
 	if original.Error() == prefixed.Error() {
@@ -204,7 +206,7 @@ func TestWrapPrefixError(t *testing.T) {
 		t.Errorf("Constructor with nil failed")
 	}
 
-	locFile, _ := prefixed.Location()
+	locFile, _ := prefixedErr.Location()
 	if !strings.HasSuffix(locFile, "error_test.go") {
 		t.Errorf("Location failed: got %q", locFile)
 	}
@@ -228,32 +230,32 @@ func ExampleIs() {
 }
 
 func ExampleNew() {
-	err := New(io.EOF)
+	err := New("something failed")
 	fmt.Println(err)
 }
 
 func ExampleError_Error() {
-	err := New(io.EOF)
+	err := From(io.EOF)
 	fmt.Println(err.Error())
 }
 
 func ExampleError_ErrorStack() {
-	err := New(io.EOF)
+	err := From(io.EOF)
 	fmt.Println(err.ErrorStack())
 }
 
 func ExampleError_Stack() {
-	err := New(io.EOF)
+	err := From(io.EOF)
 	fmt.Println(err.Stack())
 }
 
 func ExampleError_TypeName() {
-	err := New(io.EOF)
+	err := From(io.EOF)
 	fmt.Println(err.TypeName(), err.Error())
 }
 
 func ExampleError_StackFrames() {
-	err := New(io.EOF)
+	err := From(io.EOF)
 	for _, frame := range err.StackFrames() {
 		fmt.Println(frame.File, frame.LineNumber, frame.Package, frame.Name)
 	}

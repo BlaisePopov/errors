@@ -26,28 +26,28 @@ func TestIs113(t *testing.T) {
 		t.Errorf("custErr is a notOk customError")
 	}
 
-	if !Is(custErr, New(shouldMatch)) {
-		t.Errorf("custErr is not a New(TestForFun customError)")
+	if !Is(custErr, Wrap(shouldMatch, 0)) {
+		t.Errorf("custErr is not a Wrap(TestForFun customError)")
 	}
 
-	if Is(custErr, New(shouldNotMatch)) {
-		t.Errorf("custErr is a New(notOk customError)")
+	if Is(custErr, Wrap(shouldNotMatch, 0)) {
+		t.Errorf("custErr is a Wrap(notOk customError)")
 	}
 
-	if !Is(New(custErr), shouldMatch) {
-		t.Errorf("New(custErr) is not a TestForFun customError")
+	if !Is(Wrap(custErr, 0), shouldMatch) {
+		t.Errorf("Wrap(custErr) is not a TestForFun customError")
 	}
 
-	if Is(New(custErr), shouldNotMatch) {
-		t.Errorf("New(custErr) is a notOk customError")
+	if Is(Wrap(custErr, 0), shouldNotMatch) {
+		t.Errorf("Wrap(custErr) is a notOk customError")
 	}
 
-	if !Is(New(custErr), New(shouldMatch)) {
-		t.Errorf("New(custErr) is not a New(TestForFun customError)")
+	if !Is(Wrap(custErr, 0), Wrap(shouldMatch, 0)) {
+		t.Errorf("Wrap(custErr) is not a Wrap(TestForFun customError)")
 	}
 
-	if Is(New(custErr), New(shouldNotMatch)) {
-		t.Errorf("New(custErr) is a New(notOk customError)")
+	if Is(Wrap(custErr, 0), Wrap(shouldNotMatch, 0)) {
+		t.Errorf("Wrap(custErr) is a Wrap(notOk customError)")
 	}
 }
 
