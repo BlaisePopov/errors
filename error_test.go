@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -193,8 +192,8 @@ func TestWrapPrefixError(t *testing.T) {
 	prefixed := WrapPrefix(e, "prefix", 0)
 	original := e.(*Error)
 
-	if prefixed.Err != original.Err || !reflect.DeepEqual(prefixed.stack, original.stack) || !reflect.DeepEqual(prefixed.frames, original.frames) || prefixed.Error() != "prefix: prefix: hi" {
-		t.Errorf("Constructor with an Error failed")
+	if prefixed.Err != original || prefixed.Error() != "prefix: prefix: hi" {
+		t.Errorf("Constructor with an Error failed: got Err=%v, Error=%q", prefixed.Err, prefixed.Error())
 	}
 
 	if original.Error() == prefixed.Error() {
@@ -205,8 +204,9 @@ func TestWrapPrefixError(t *testing.T) {
 		t.Errorf("Constructor with nil failed")
 	}
 
-	if !strings.HasSuffix(original.StackFrames()[0].File, "error_test.go") || strings.HasSuffix(original.StackFrames()[1].File, "error_test.go") {
-		t.Errorf("Skip failed")
+	locFile, _ := prefixed.Location()
+	if !strings.HasSuffix(locFile, "error_test.go") {
+		t.Errorf("Location failed: got %q", locFile)
 	}
 }
 

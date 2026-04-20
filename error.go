@@ -69,6 +69,10 @@ type Error struct {
 	stack  []uintptr
 	frames []StackFrame
 	prefix string
+
+	locFile string
+	locLine int
+	locFunc string
 }
 
 // New makes an Error from the given value. If that value is already an
@@ -90,9 +94,23 @@ func New(e any) *Error {
 	length := runtime.Callers(2, (*bufPtr)[:])
 	stack := make([]uintptr, length)
 	copy(stack, (*bufPtr)[:length])
+
+	var file string
+	var line int
+	var fnName string
+	if length > 0 {
+		frame, _ := runtime.CallersFrames(stack[:1]).Next()
+		file = frame.File
+		line = frame.Line
+		fnName = frame.Function
+	}
+
 	return &Error{
-		Err:   err,
-		stack: stack,
+		Err:     err,
+		stack:   stack,
+		locFile: file,
+		locLine: line,
+		locFunc: fnName,
 	}
 }
 
@@ -144,18 +162,35 @@ func WrapPrefix(e any, prefix string, skip int) *Error {
 		return nil
 	}
 
-	err := Wrap(e, 1+skip)
+	var inner error
+	switch v := e.(type) {
+	case *Error:
+		inner = v
+	case error:
+		inner = v
+	default:
+		inner = fmt.Errorf("%v", v)
+	}
 
-	if err.prefix != "" {
-		prefix = prefix + ": " + err.prefix
+	var rpc [1]uintptr
+	n := runtime.Callers(2+skip, rpc[:])
+	var file string
+	var line int
+	var fnName string
+	if n > 0 {
+		frame, _ := runtime.CallersFrames(rpc[:]).Next()
+		file = frame.File
+		line = frame.Line
+		fnName = frame.Function
 	}
 
 	return &Error{
-		Err:    err.Err,
-		stack:  err.stack,
-		prefix: prefix,
+		Err:     inner,
+		prefix:  prefix,
+		locFile: file,
+		locLine: line,
+		locFunc: fnName,
 	}
-
 }
 
 // Errorf creates a new error with the given message. You can use it
@@ -231,6 +266,28 @@ func (err *Error) TypeName() string {
 		return "nil"
 	}
 	return reflect.TypeOf(err.Err).String()
+}
+
+func (err *Error) Prefix() string {
+	return err.prefix
+}
+
+func (err *Error) Location() (string, int) {
+	if err.locFile != "" {
+		return err.locFile, err.locLine
+	}
+	frames := err.StackFrames()
+	if len(frames) > 0 {
+		return frames[0].File, frames[0].LineNumber
+	}
+	return "", 0
+}
+
+func (err *Error) LocationFunc() string {
+	if err.locFunc != "" {
+		return err.locFunc
+	}
+	return ""
 }
 
 // Unwrap returns the wrapped error (implements api for As function).
