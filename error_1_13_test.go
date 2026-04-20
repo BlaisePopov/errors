@@ -1,5 +1,3 @@
-// +build go1.13
-
 package errors
 
 import (
@@ -7,8 +5,8 @@ import (
 	"testing"
 )
 
-// This test should work only for go 1.13 and latter
 func TestIs113(t *testing.T) {
+	t.Parallel()
 	custErr := errorWithCustomIs{
 		Key: "TestForFun",
 		Err: io.EOF,

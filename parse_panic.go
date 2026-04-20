@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// uncaughtPanic marks an error as originating from a recovered panic.
 type uncaughtPanic struct{ message string }
 
 func (p uncaughtPanic) Error() string {
@@ -19,7 +20,7 @@ func ParsePanic(text string) (*Error, error) {
 	state := "start"
 
 	var message string
-	var stack []StackFrame
+	stack := make([]StackFrame, 0, 8)
 
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
@@ -29,7 +30,7 @@ func ParsePanic(text string) (*Error, error) {
 				message = strings.TrimPrefix(line, "panic: ")
 				state = "seek"
 			} else {
-				return nil, Errorf("bugsnag.panicParser: Invalid line (no prefix): %s", line)
+				return nil, Errorf("errors.panicParser: Invalid line (no prefix): %s", line)
 			}
 
 		} else if state == "seek" {
@@ -51,7 +52,7 @@ func ParsePanic(text string) (*Error, error) {
 			i++
 
 			if i >= len(lines) {
-				return nil, Errorf("bugsnag.panicParser: Invalid line (unpaired): %s", line)
+				return nil, Errorf("errors.panicParser: Invalid line (unpaired): %s", line)
 			}
 
 			frame, err := parsePanicFrame(line, lines[i], createdBy)
@@ -75,12 +76,12 @@ func ParsePanic(text string) (*Error, error) {
 
 // The lines we're passing look like this:
 //
-//     main.(*foo).destruct(0xc208067e98)
-//             /0/go/src/github.com/bugsnag/bugsnag-go/pan/main.go:22 +0x151
+//	main.(*foo).destruct(0xc208067e98)
+//	        /0/go/src/github.com/bugsnag/bugsnag-go/pan/main.go:22 +0x151
 func parsePanicFrame(name string, line string, createdBy bool) (*StackFrame, error) {
 	idx := strings.LastIndex(name, "(")
 	if idx == -1 && !createdBy {
-		return nil, Errorf("bugsnag.panicParser: Invalid line (no call): %s", name)
+		return nil, Errorf("errors.panicParser: Invalid line (no call): %s", name)
 	}
 	if idx != -1 {
 		name = name[:idx]
@@ -96,15 +97,15 @@ func parsePanicFrame(name string, line string, createdBy bool) (*StackFrame, err
 		name = name[period+1:]
 	}
 
-	name = strings.Replace(name, "·", ".", -1)
+	name = strings.ReplaceAll(name, "·", ".")
 
 	if !strings.HasPrefix(line, "\t") {
-		return nil, Errorf("bugsnag.panicParser: Invalid line (no tab): %s", line)
+		return nil, Errorf("errors.panicParser: Invalid line (no tab): %s", line)
 	}
 
 	idx = strings.LastIndex(line, ":")
 	if idx == -1 {
-		return nil, Errorf("bugsnag.panicParser: Invalid line (no line number): %s", line)
+		return nil, Errorf("errors.panicParser: Invalid line (no line number): %s", line)
 	}
 	file := line[1:idx]
 
@@ -115,7 +116,7 @@ func parsePanicFrame(name string, line string, createdBy bool) (*StackFrame, err
 
 	lno, err := strconv.ParseInt(number, 10, 32)
 	if err != nil {
-		return nil, Errorf("bugsnag.panicParser: Invalid line (bad line number): %s", line)
+		return nil, Errorf("errors.panicParser: Invalid line (bad line number): %s", line)
 	}
 
 	return &StackFrame{

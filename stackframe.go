@@ -12,19 +12,19 @@ import (
 // A StackFrame contains all necessary information about to generate a line
 // in a callstack.
 type StackFrame struct {
-	// The path to the file containing this ProgramCounter
+	// File is the path to the file containing this ProgramCounter.
 	File string
-	// The LineNumber in that file
+	// LineNumber is the line number in that file.
 	LineNumber int
-	// The Name of the function that contains this ProgramCounter
+	// Name is the name of the function that contains this ProgramCounter.
 	Name string
-	// The Package that contains this function
+	// Package is the package that contains this function.
 	Package string
-	// The underlying ProgramCounter
+	// ProgramCounter is the underlying program counter.
 	ProgramCounter uintptr
 }
 
-// NewStackFrame popoulates a stack frame object from the program counter.
+// NewStackFrame populates a stack frame object from the program counter.
 func NewStackFrame(pc uintptr) (frame StackFrame) {
 
 	frame = StackFrame{ProgramCounter: pc}
@@ -51,14 +51,16 @@ func (frame *StackFrame) Func() *runtime.Func {
 // String returns the stackframe formatted in the same way as go does
 // in runtime/debug.Stack()
 func (frame *StackFrame) String() string {
-	str := fmt.Sprintf("%s:%d (0x%x)\n", frame.File, frame.LineNumber, frame.ProgramCounter)
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s:%d (0x%x)\n", frame.File, frame.LineNumber, frame.ProgramCounter)
 
 	source, err := frame.sourceLine()
 	if err != nil {
-		return str
+		return b.String()
 	}
 
-	return str + fmt.Sprintf("\t%s: %s\n", frame.Name, source)
+	fmt.Fprintf(&b, "\t%s: %s\n", frame.Name, source)
+	return b.String()
 }
 
 // SourceLine gets the line of code (from File and Line) of the original source if possible.
@@ -103,9 +105,13 @@ func packageAndName(fn *runtime.Func) (string, string) {
 	// The name includes the path name to the package, which is unnecessary
 	// since the file name is already included.  Plus, it has center dots.
 	// That is, we see
-	//  runtime/debug.*T·ptrmethod
+	//
+	//	runtime/debug.*T·ptrmethod
+	//
 	// and want
-	//  *T.ptrmethod
+	//
+	//	*T.ptrmethod
+	//
 	// Since the package path might contains dots (e.g. code.google.com/...),
 	// we first remove the path prefix if there is one.
 	if lastslash := strings.LastIndex(name, "/"); lastslash >= 0 {
@@ -117,6 +123,6 @@ func packageAndName(fn *runtime.Func) (string, string) {
 		name = name[period+1:]
 	}
 
-	name = strings.Replace(name, "·", ".", -1)
+	name = strings.ReplaceAll(name, "·", ".")
 	return pkg, name
 }
