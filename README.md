@@ -2,6 +2,8 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-errors/errors.svg)](https://pkg.go.dev/github.com/go-errors/errors)
 
+**Languages:** English | [Русский](README.ru.md) | [Español](README.es.md) | [中文](README.zh.md)
+
 Package `errors` adds stack trace support to errors in Go.
 
 It is a **drop-in replacement** for the standard library `errors` package:
@@ -88,12 +90,6 @@ making concurrent calls to `StackFrames()` and `Stack()` safe.
 
 ### Internal benchmarks
 
-Run from within the `goerrors` directory:
-
-```bash
-go test -bench=Benchmark -benchmem ./...
-```
-
 Results (Windows/amd64, Intel i5-8250U):
 
 | Operation                | ns/op | allocs | B/op |
@@ -108,12 +104,6 @@ Results (Windows/amd64, Intel i5-8250U):
 | `From()`                 | 1678  |   2    | 176  |
 
 ### Comparative benchmarks (vs. cockroachdb/errors, juju/errors)
-
-Run from the repository root:
-
-```bash
-go test -bench=Benchmark -benchmem -run=^$ .
-```
 
 #### New — leaf error creation
 
@@ -168,24 +158,6 @@ go test -bench=Benchmark -benchmem -run=^$ .
 | juju/errors            |  6.4  |   0    |   0  |
 | cockroachdb/errors     | 86.9  |   0    |   0  |
 | go-errors/errors       |  9.0  |   0    |   0  |
-
-### Conclusions
-
-1. **Stack trace extraction is the standout win.** This package is **6× faster** than
-   juju/errors, **74× faster** than cockroachdb/errors, and **1 258× faster** than
-   go-errors/errors for stack trace rendering — thanks to `bytes.Buffer` zero-copy
-   output and lazy `sync.Once` frame resolution.
-
-2. **WrapPrefix is allocation-efficient.** Single-wrap produces only **1 alloc / 144 B**,
-   beating juju (3/328) and cockroachdb (7/432). The 5-wrap pipeline uses **fewer than
-   half the allocations** of any competitor (8 allocs vs 18–42).
-
-3. **Error() string formatting is fast.** At **417 ns** for a 5-wrap chain, it
-   beats juju (6.4×) and cockroachdb (27×), with moderate overhead vs the
-   minimal go-errors/errors (255 ns) which does no prefix concatenation.
-
-4. **New() trades memory for speed.** Leaf creation uses **192 B / 3 allocs** — the
-   smallest memory footprint of all tested packages, while being competitively fast.
 
 ## License
 
