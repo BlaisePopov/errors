@@ -3,6 +3,7 @@ package errors
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"os"
 	"runtime"
 	"strconv"
@@ -85,7 +86,7 @@ func (f *StackFrame) String() string {
 func (f *StackFrame) SourceLine() (string, error) {
 	source, err := f.sourceLine()
 	if err != nil {
-		return source, Wrap(err, 1)
+		return source, fmt.Errorf("source line: %w", err)
 	}
 	return source, err
 }

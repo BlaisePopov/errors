@@ -1,12 +1,13 @@
 package errors
 
 import (
+	"bytes"
 	baseErrors "errors"
 	"fmt"
 	"reflect"
 	"runtime"
-	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // ErrUnsupported is the standard sentinel indicating that a requested
@@ -15,9 +16,19 @@ import (
 var ErrUnsupported = baseErrors.ErrUnsupported
 
 // MaxStackDepth is the maximum number of stack frames captured for any error.
-// It is safe to read concurrently. If modified, do so before calling
-// New, Wrap, WrapPrefix, or From for the first time.
-var MaxStackDepth = 32
+// It is safe to read and write concurrently via SetMaxStackDepth (or direct
+// atomic operations). The default is 32.
+var MaxStackDepth int32 = 32
+
+func getMaxStackDepth() int {
+	return int(atomic.LoadInt32(&MaxStackDepth))
+}
+
+// SetMaxStackDepth sets the maximum number of stack frames captured for any
+// error. It is safe to call concurrently.
+func SetMaxStackDepth(n int) {
+	atomic.StoreInt32(&MaxStackDepth, int32(n))
+}
 
 // captureStack captures up to depth program counters starting skip frames
 // above the caller. The skip parameter is relative to the caller of
@@ -52,7 +63,8 @@ func resolveLocation(stack []uintptr) (file string, line int, fnName string) {
 // the builtin error interface is expected.
 type Error struct {
 	// Err is the underlying error. It is exported for backward compatibility
-	// with code that accesses it directly. Prefer Unwrap for idiomatic usage.
+	// with code that reads it directly. Do not modify Err after the *Error has
+	// been published to other goroutines; prefer Unwrap for idiomatic access.
 	Err    error
 	stack  []uintptr
 	prefix string
@@ -78,7 +90,7 @@ func (e *textError) Error() string { return e.msg }
 // replacement for the standard library errors.New and additionally records
 // a stack trace at the point it was called.
 func New(text string) error {
-	stack := captureStack(0, MaxStackDepth)
+	stack := captureStack(0, getMaxStackDepth())
 	file, line, fnName := resolveLocation(stack)
 
 	return &Error{
@@ -102,7 +114,7 @@ func From(v any) *Error {
 		err = fmt.Errorf("%v", v)
 	}
 
-	stack := captureStack(0, MaxStackDepth)
+	stack := captureStack(0, getMaxStackDepth())
 	file, line, fnName := resolveLocation(stack)
 
 	return &Error{
@@ -127,7 +139,7 @@ func Wrap(err error, skip int) error {
 		return e
 	}
 
-	stack := captureStack(skip, MaxStackDepth)
+	stack := captureStack(skip, getMaxStackDepth())
 	return &Error{
 		Err:   err,
 		stack: stack,
@@ -218,6 +230,9 @@ func Join(errs ...error) error {
 // Error returns the underlying error's message. If a prefix was set via
 // WrapPrefix, it is prepended as "prefix: message".
 func (e *Error) Error() string {
+	if e.Err == nil {
+		return e.prefix
+	}
 	msg := e.Err.Error()
 	if e.prefix != "" {
 		msg = e.prefix + ": " + msg
@@ -232,12 +247,12 @@ func (e *Error) Stack() []byte {
 	if len(frames) == 0 {
 		return nil
 	}
-	var b strings.Builder
-	b.Grow(len(frames) * 128)
+	var buf bytes.Buffer
+	buf.Grow(len(frames) * 128)
 	for _, frame := range frames {
-		b.WriteString(frame.String())
+		buf.WriteString(frame.String())
 	}
-	return []byte(b.String())
+	return buf.Bytes()
 }
 
 // Callers returns the raw program counters of the call stack.
@@ -248,13 +263,13 @@ func (e *Error) Callers() []uintptr {
 // ErrorStack returns a string that contains both the error message and
 // the full call stack.
 func (e *Error) ErrorStack() string {
-	var b strings.Builder
-	b.WriteString(e.TypeName())
-	b.WriteByte(' ')
-	b.WriteString(e.Error())
-	b.WriteByte('\n')
-	b.Write(e.Stack())
-	return b.String()
+	var buf bytes.Buffer
+	buf.WriteString(e.TypeName())
+	buf.WriteByte(' ')
+	buf.WriteString(e.Error())
+	buf.WriteByte('\n')
+	buf.Write(e.Stack())
+	return buf.String()
 }
 
 // StackFrames returns the stack frames containing information about the
@@ -315,22 +330,6 @@ func (e *Error) FuncName() string {
 // was created. It is an alias for FuncName, kept for backward compatibility.
 func (e *Error) LocationFunc() string {
 	return e.locFunc
-}
-
-// Is reports whether the current error should be considered a match for
-// target. It delegates to the wrapped error so that errors.Is can match
-// across *Error boundaries (e.g. From(io.EOF) matches From(io.EOF)).
-func (e *Error) Is(target error) bool {
-	if target == nil {
-		return e == nil
-	}
-	if t, ok := target.(*Error); ok {
-		if t.Err != nil {
-			return baseErrors.Is(e.Err, t.Err)
-		}
-		return e.Err == nil
-	}
-	return baseErrors.Is(e.Err, target)
 }
 
 // Unwrap returns the wrapped error, implementing the standard unwrap

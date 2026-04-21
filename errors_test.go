@@ -37,70 +37,66 @@ func BenchmarkStackFormat(b *testing.B) {
 // Is / As
 // ---------------------------------------------------------------------------
 
-func TestIs_nil(t *testing.T) {
-	if Is(nil, io.EOF) {
-		t.Errorf("nil should not match io.EOF")
-	}
-}
+func TestIs(t *testing.T) {
+	t.Run("nil err", func(t *testing.T) {
+		if Is(nil, io.EOF) {
+			t.Errorf("nil should not match io.EOF")
+		}
+	})
 
-func TestIs_identical(t *testing.T) {
-	if !Is(io.EOF, io.EOF) {
-		t.Errorf("io.EOF should match io.EOF")
-	}
-}
+	t.Run("identical sentinels", func(t *testing.T) {
+		if !Is(io.EOF, io.EOF) {
+			t.Errorf("io.EOF should match io.EOF")
+		}
+	})
 
-func TestIs_wrappedSource(t *testing.T) {
-	if !Is(From(io.EOF), io.EOF) {
-		t.Errorf("From(io.EOF) should match io.EOF via Unwrap")
-	}
-}
+	t.Run("wrapped matches inner", func(t *testing.T) {
+		if !Is(From(io.EOF), io.EOF) {
+			t.Errorf("From(io.EOF) should match io.EOF via Unwrap")
+		}
+	})
 
-func TestIs_doubleWrapped(t *testing.T) {
-	if !Is(From(io.EOF), From(io.EOF)) {
-		t.Errorf("From(io.EOF) should match From(io.EOF)")
-	}
-}
+	t.Run("different errors", func(t *testing.T) {
+		if Is(io.EOF, fmt.Errorf("io.EOF")) {
+			t.Errorf("io.EOF should not match fmt.Errorf(\"io.EOF\")")
+		}
+	})
 
-func TestIs_differentErrors(t *testing.T) {
-	if Is(io.EOF, fmt.Errorf("io.EOF")) {
-		t.Errorf("io.EOF should not match fmt.Errorf(\"io.EOF\")")
-	}
-}
+	t.Run("custom Is method", func(t *testing.T) {
+		t.Parallel()
+		custErr := errorWithCustomIs{
+			Key: "TestForFun",
+			Err: io.EOF,
+		}
 
-func TestIs_customIsMethod(t *testing.T) {
-	t.Parallel()
-	custErr := errorWithCustomIs{
-		Key: "TestForFun",
-		Err: io.EOF,
-	}
+		shouldMatch := errorWithCustomIs{
+			Key: "TestForFun",
+		}
+		shouldNotMatch := errorWithCustomIs{Key: "notOk"}
 
-	shouldMatch := errorWithCustomIs{
-		Key: "TestForFun",
-	}
-	shouldNotMatch := errorWithCustomIs{Key: "notOk"}
+		tests := []struct {
+			name   string
+			err    error
+			target error
+			want   bool
+		}{
+			{"direct match", custErr, shouldMatch, true},
+			{"direct no match", custErr, shouldNotMatch, false},
+			{"wrap target match", custErr, Wrap(shouldMatch, 0), false},
+			{"wrap target no match", custErr, Wrap(shouldNotMatch, 0), false},
+			{"wrap source match", Wrap(custErr, 0), shouldMatch, true},
+			{"wrap source no match", Wrap(custErr, 0), shouldNotMatch, false},
+		}
 
-	tests := []struct {
-		name string
-		err  error
-		target error
-		want bool
-	}{
-		{"direct match", custErr, shouldMatch, true},
-		{"direct no match", custErr, shouldNotMatch, false},
-		{"wrap target match", custErr, Wrap(shouldMatch, 0), false},     // stdlib Is does NOT unwrap target
-		{"wrap target no match", custErr, Wrap(shouldNotMatch, 0), false},
-		{"wrap source match", Wrap(custErr, 0), shouldMatch, true},
-		{"wrap source no match", Wrap(custErr, 0), shouldNotMatch, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := Is(tt.err, tt.target)
-			if got != tt.want {
-				t.Errorf("Is(%v, %v) = %v, want %v", tt.err, tt.target, got, tt.want)
-			}
-		})
-	}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got := Is(tt.err, tt.target)
+				if got != tt.want {
+					t.Errorf("Is(%v, %v) = %v, want %v", tt.err, tt.target, got, tt.want)
+				}
+			})
+		}
+	})
 }
 
 func TestAs(t *testing.T) {
@@ -130,53 +126,55 @@ func TestAs(t *testing.T) {
 // Stack traces
 // ---------------------------------------------------------------------------
 
-func TestStackFormat(t *testing.T) {
-	defer func() {
-		err := recover()
-		if err != 'a' {
-			t.Fatal(err)
-		}
+func TestStack(t *testing.T) {
+	t.Run("format matches runtime", func(t *testing.T) {
+		defer func() {
+			err := recover()
+			if err != 'a' {
+				t.Fatal(err)
+			}
 
-		e, expected := Errorf("hi").(*Error), callers()
+			e, expected := Errorf("hi").(*Error), callers()
 
-		bs := [][]uintptr{e.stack, expected}
+			bs := [][]uintptr{e.stack, expected}
 
-		if err := compareStacks(bs[0], bs[1]); err != nil {
-			t.Errorf("Stack didn't match")
-			t.Error(err.Error())
-		}
+			if err := compareStacks(bs[0], bs[1]); err != nil {
+				t.Errorf("Stack didn't match")
+				t.Error(err.Error())
+			}
 
-		stack := string(e.Stack())
+			stack := string(e.Stack())
 
-		if !strings.Contains(stack, "a: b(5)") {
-			t.Errorf("Stack trace does not contain source line: 'a: b(5)'")
-			t.Error(stack)
-		}
-		if !strings.Contains(stack, "errors_test.go:") {
-			t.Errorf("Stack trace does not contain file name: 'errors_test.go:'")
-			t.Error(stack)
-		}
-	}()
+			if !strings.Contains(stack, "a: b(5)") {
+				t.Errorf("Stack trace does not contain source line: 'a: b(5)'")
+				t.Error(stack)
+			}
+			if !strings.Contains(stack, "errors_test.go:") {
+				t.Errorf("Stack trace does not contain file name: 'errors_test.go:'")
+				t.Error(stack)
+			}
+		}()
 
-	a()
-}
+		a()
+	})
 
-func TestSkipWorks(t *testing.T) {
-	defer func() {
-		err := recover()
-		if err != 'a' {
-			t.Fatal(err)
-		}
+	t.Run("skip parameter", func(t *testing.T) {
+		defer func() {
+			err := recover()
+			if err != 'a' {
+				t.Fatal(err)
+			}
 
-		bs := [][]uintptr{Wrap(fmt.Errorf("hi"), 2).(*Error).stack, callersSkip(2)}
+			bs := [][]uintptr{Wrap(fmt.Errorf("hi"), 2).(*Error).stack, callersSkip(2)}
 
-		if err := compareStacks(bs[0], bs[1]); err != nil {
-			t.Errorf("Stack didn't match")
-			t.Error(err.Error())
-		}
-	}()
+			if err := compareStacks(bs[0], bs[1]); err != nil {
+				t.Errorf("Stack didn't match")
+				t.Error(err.Error())
+			}
+		}()
 
-	a()
+		a()
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -426,7 +424,8 @@ func callers() []uintptr {
 }
 
 func callersSkip(skip int) []uintptr {
-	callers := make([]uintptr, MaxStackDepth)
+	depth := getMaxStackDepth()
+	callers := make([]uintptr, depth)
 	length := runtime.Callers(skip+2, callers[:])
 	return callers[:length]
 }
@@ -463,11 +462,11 @@ type errorWithCustomIs struct {
 	Err error
 }
 
-func (ewci errorWithCustomIs) Error() string {
-	return "[" + ewci.Key + "]: " + ewci.Err.Error()
+func (e errorWithCustomIs) Error() string {
+	return "[" + e.Key + "]: " + e.Err.Error()
 }
 
-func (ewci errorWithCustomIs) Is(target error) bool {
+func (e errorWithCustomIs) Is(target error) bool {
 	matched, ok := target.(errorWithCustomIs)
-	return ok && matched.Key == ewci.Key
+	return ok && matched.Key == e.Key
 }
