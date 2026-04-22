@@ -94,70 +94,70 @@ Results (Windows/amd64, Intel i5-8250U):
 
 | Operation                | ns/op | allocs | B/op |
 |--------------------------|------:|-------:|-----:|
-| `New()`                  |  964  |   3    | 192  |
-| `Wrap()`                 |  611  |   2    | 176  |
-| `WrapPrefix()`           |  422  |   1    | 144  |
+| `New()`                  |  195  |   1    |  96  |
+| `Wrap()`                 |  218  |   1    |  96  |
+| `WrapPrefix()`           |  209  |   1    |  96  |
 | `Error()`                |    4  |   0    |   0  |
-| `StackFrames()` (cached) |    3  |   0    |   0  |
-| `Stack()`                | 1659  |  12    | 1248 |
-| `ErrorStack()`           | 2267  |  15    | 2208 |
-| `From()`                 | 1678  |   2    | 176  |
+| `StackFrames()` (cached) |    5  |   0    |   0  |
+| `Stack()` (cached)       |    5  |   0    |   0  |
+| `ErrorStack()` (cached)  |    5  |   0    |   0  |
+| `From()`                 |  219  |   1    |  96  |
 
 ### Comparative benchmarks (vs. cockroachdb/errors, juju/errors)
 
 #### New — leaf error creation
 
-| Package                | ns/op  | allocs | B/op |
-|------------------------|-------:|-------:|-----:|
-| **this package**       |   1903 |   3    |  192 |
-| juju/errors            |    738 |   3    |  328 |
-| cockroachdb/errors     |   1639 |   7    |  416 |
-| go-errors/errors       |   1785 |   4    |  528 |
+| Package                | ns/op | allocs | B/op |
+|------------------------|------:|-------:|-----:|
+| **this package**       |   210 |   1    |  96  |
+| juju/errors            |   689 |   3    | 328  |
+| cockroachdb/errors     |  1553 |   7    | 416  |
+| go-errors/errors       |   894 |   4    | 528  |
 
 #### Single Wrap — wrapping a pre-existing error
 
 | Package                | ns/op | allocs | B/op |
 |------------------------|------:|-------:|-----:|
-| **this package**       |   471 |   1    |  144 |
-| juju/errors            |   774 |   3    |  328 |
-| cockroachdb/errors     |  2608 |   7    |  432 |
-| go-errors/errors       |    79 |   1    |   80 |
+| **this package**       |   220 |   1    |  96  |
+| juju/errors            |   778 |   3    | 328  |
+| cockroachdb/errors     |  1836 |   7    | 432  |
+| go-errors/errors       |    81 |   1    |  80  |
 
 #### Create + Wrap ×5 — full chained error pipeline
 
 | Package                | ns/op | allocs | B/op |
 |------------------------|------:|-------:|-----:|
-| **this package**       |  5145 |   8    |  928 |
-| juju/errors            |  5320 |  18    | 1968 |
-| cockroachdb/errors     | 11126 |  42    | 2577 |
-| go-errors/errors       |  2496 |  21    | 1224 |
+| **this package**       |  1161 |   6    | 576  |
+| juju/errors            |  6088 |  18    | 1968 |
+| cockroachdb/errors     | 12461 |  42    | 2577 |
+| go-errors/errors       |  2364 |  21    | 1224 |
 
 #### Error() — string formatting of 5-wrap chain
 
 | Package                | ns/op | allocs | B/op |
 |------------------------|------:|-------:|-----:|
-| **this package**       |   417 |   5    |  248 |
-| juju/errors            |  2682 |  15    |  408 |
-| cockroachdb/errors     | 11333 |  67    | 5928 |
-| go-errors/errors       |   255 |   3    |  112 |
+| **this package**       |   3.4 |   0    |   0  |
+| juju/errors            |  3059 |  15    | 408  |
+| cockroachdb/errors     | 11996 |  67    | 5945 |
+| go-errors/errors       |   286 |   3    | 112  |
 
 #### Stack trace extraction
 
-| Package                |    ns/op | allocs |   B/op |
-|------------------------|--------:|-------:|-------:|
-| **this package**       |     685 |   8    |   520  |
-| juju/errors            |   4 173  |  31    |  1680  |
-| cockroachdb/errors     |  50 990  | 126    | 22585  |
-| go-errors/errors       | 861 620  |  70    | 27791  |
+| Package                |     ns/op | allocs |    B/op |
+|------------------------|---------:|-------:|--------:|
+| **this package**       |      5.6 |   0    |      0  |
+| juju/errors            |     4422 |  31    |   1680  |
+| cockroachdb/errors     |    56594 | 126    |  22604  |
+| go-errors/errors       |   555963 |  70    |  27790  |
 
 #### Unwrap all — full chain traversal
 
 | Package                | ns/op | allocs | B/op |
 |------------------------|------:|-------:|-----:|
-| **this package**       | 40.5  |   0    |   0  |
-| juju/errors            |  6.4  |   0    |   0  |
-| cockroachdb/errors     | 86.9  |   0    |   0  |
-| go-errors/errors       |  9.0  |   0    |   0  |
+| **this package**       |  35.4 |   0    |   0  |
+| juju/errors            |   6.5 |   0    |   0  |
+| cockroachdb/errors     |  72.9 |   0    |   0  |
+| go-errors/errors       |   8.5 |   0    |   0  |
 
 ## License
 

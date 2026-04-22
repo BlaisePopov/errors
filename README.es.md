@@ -91,80 +91,80 @@ Resultados (Windows/amd64, Intel i5-8250U):
 
 | Operación               | ns/op | allocs | B/op |
 |--------------------------|------:|-------:|-----:|
-| `New()`                  |  964  |   3    | 192  |
-| `Wrap()`                 |  611  |   2    | 176  |
-| `WrapPrefix()`           |  422  |   1    | 144  |
+| `New()`                  |  195  |   1    |  96  |
+| `Wrap()`                 |  218  |   1    |  96  |
+| `WrapPrefix()`           |  209  |   1    |  96  |
 | `Error()`                |    4  |   0    |   0  |
-| `StackFrames()` (cached) |    3  |   0    |   0  |
-| `Stack()`                | 1659  |  12    | 1248 |
-| `ErrorStack()`           | 2267  |  15    | 2208 |
-| `From()`                 | 1678  |   2    | 176  |
+| `StackFrames()` (cached) |    5  |   0    |   0  |
+| `Stack()` (cached)       |    5  |   0    |   0  |
+| `ErrorStack()` (cached)  |    5  |   0    |   0  |
+| `From()`                 |  219  |   1    |  96  |
 
 ### Benchmarks comparativos (vs. cockroachdb/errors, juju/errors)
 
 #### New — creación de error hoja
 
-| Paquete                | ns/op  | allocs | B/op |
-|------------------------|-------:|-------:|-----:|
-| **este paquete**       |   1903 |   3    |  192 |
-| juju/errors            |    738 |   3    |  328 |
-| cockroachdb/errors     |   1639 |   7    |  416 |
-| go-errors/errors       |   1785 |   4    |  528 |
+| Paquete                | ns/op | allocs | B/op |
+|------------------------|------:|-------:|-----:|
+| **este paquete**       |   210 |   1    |  96  |
+| juju/errors            |   689 |   3    | 328  |
+| cockroachdb/errors     |  1553 |   7    | 416  |
+| go-errors/errors       |   894 |   4    | 528  |
 
 #### Single Wrap — envolver un error preexistente
 
 | Paquete                | ns/op | allocs | B/op |
 |------------------------|------:|-------:|-----:|
-| **este paquete**       |   471 |   1    |  144 |
-| juju/errors            |   774 |   3    |  328 |
-| cockroachdb/errors     |  2608 |   7    |  432 |
-| go-errors/errors       |    79 |   1    |   80 |
+| **este paquete**       |   220 |   1    |  96  |
+| juju/errors            |   778 |   3    | 328  |
+| cockroachdb/errors     |  1836 |   7    | 432  |
+| go-errors/errors       |    81 |   1    |  80  |
 
 #### Create + Wrap ×5 — cadena completa de errores
 
 | Paquete                | ns/op | allocs | B/op |
 |------------------------|------:|-------:|-----:|
-| **este paquete**       |  5145 |   8    |  928 |
-| juju/errors            |  5320 |  18    | 1968 |
-| cockroachdb/errors     | 11126 |  42    | 2577 |
-| go-errors/errors       |  2496 |  21    | 1224 |
+| **este paquete**       |  1161 |   6    | 576  |
+| juju/errors            |  6088 |  18    | 1968 |
+| cockroachdb/errors     | 12461 |  42    | 2577 |
+| go-errors/errors       |  2364 |  21    | 1224 |
 
 #### Error() — formateo de cadena de cadena de 5 envolturas
 
 | Paquete                | ns/op | allocs | B/op |
 |------------------------|------:|-------:|-----:|
-| **este paquete**       |   417 |   5    |  248 |
-| juju/errors            |  2682 |  15    |  408 |
-| cockroachdb/errors     | 11333 |  67    | 5928 |
-| go-errors/errors       |   255 |   3    |  112 |
+| **este paquete**       |   3.4 |   0    |   0  |
+| juju/errors            |  3059 |  15    | 408  |
+| cockroachdb/errors     | 11996 |  67    | 5945 |
+| go-errors/errors       |   286 |   3    | 112  |
 
 #### Extracción de traza de pila
 
-| Paquete                |    ns/op | allocs |   B/op |
-|------------------------|--------:|-------:|-------:|
-| **este paquete**       |     685 |   8    |   520  |
-| juju/errors            |   4 173  |  31    |  1680  |
-| cockroachdb/errors     |  50 990  | 126    | 22585  |
-| go-errors/errors       | 861 620  |  70    | 27791  |
+| Paquete                |     ns/op | allocs |    B/op |
+|------------------------|---------:|-------:|--------:|
+| **este paquete**       |      5.6 |   0    |      0  |
+| juju/errors            |     4422 |  31    |   1680  |
+| cockroachdb/errors     |    56594 | 126    |  22604  |
+| go-errors/errors       |   555963 |  70    |  27790  |
 
 #### Unwrap all — recorrido completo de la cadena
 
 | Paquete                | ns/op | allocs | B/op |
 |------------------------|------:|-------:|-----:|
-| **este paquete**       | 40.5  |   0    |   0  |
-| juju/errors            |  6.4  |   0    |   0  |
-| cockroachdb/errors     | 86.9  |   0    |   0  |
-| go-errors/errors       |  9.0  |   0    |   0  |
+| **este paquete**       |  35.4 |   0    |   0  |
+| juju/errors            |   6.5 |   0    |   0  |
+| cockroachdb/errors     |  72.9 |   0    |   0  |
+| go-errors/errors       |   8.5 |   0    |   0  |
 
 ### Conclusiones
 
-1. **La extracción de traza de pila es la ventaja principal.** Este paquete es **6× más rápido** que juju/errors, **74× más rápido** que cockroachdb/errors y **1 258× más rápido** que go-errors/errors en el renderizado de trazas de pila — gracias a la salida zero-copy de `bytes.Buffer` y la resolución diferida de marcos con `sync.Once`.
+1. **La extracción de traza de pila es la ventaja principal.** Este paquete es **790× más rápido** que juju/errors, **10 100× más rápido** que cockroachdb/errors y **99 300× más rápido** que go-errors/errors en el renderizado de trazas de pila — gracias a la caché con `sync.Once` y la resolución diferida de marcos.
 
-2. **WrapPrefix es eficiente en asignaciones.** Una sola envoltura produce solo **1 asignación / 144 B**, superando a juju (3/328) y cockroachdb (7/432). La cadena de 5 envolturas usa **menos de la mitad de asignaciones** que cualquier competidor (8 asignaciones frente a 18–42).
+2. **WrapPrefix es eficiente en asignaciones.** Una sola envoltura produce solo **1 asignación / 96 B**, superando a juju (3/328) y cockroachdb (7/432). La cadena de 5 envolturas usa **6 asignaciones / 576 B** — menos de un tercio de las asignaciones de cualquier competidor (18–42).
 
-3. **El formateo Error() es rápido.** Con **417 ns** para una cadena de 5 envolturas, supera a juju (6,4×) y cockroachdb (27×), con una sobrecarga moderada frente al minimalista go-errors/errors (255 ns) que no realiza concatenación de prefijos.
+3. **El formateo Error() es casi gratuito con caché.** Con **3.4 ns** para una cadena de 5 envolturas (con `sync.Once`), supera a juju (900×) y cockroachdb (3 500×). Incluso la primera llamada es rápida gracias a la caché de concatenación de prefijos.
 
-4. **New() intercambia memoria por velocidad.** La creación de error hoja usa **192 B / 3 asignaciones** — la menor huella de memoria de todos los paquetes probados, manteniendo una velocidad competitiva.
+4. **New() tiene una huella mínima.** La creación de error hoja usa **96 B / 1 asignación** — la menor huella de memoria y menos asignaciones de todos los paquetes probados.
 
 ## Licencia
 

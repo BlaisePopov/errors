@@ -91,80 +91,80 @@ func main() {
 
 | 操作                    | ns/op | allocs | B/op |
 |--------------------------|------:|-------:|-----:|
-| `New()`                  |  964  |   3    | 192  |
-| `Wrap()`                 |  611  |   2    | 176  |
-| `WrapPrefix()`           |  422  |   1    | 144  |
+| `New()`                  |  195  |   1    |  96  |
+| `Wrap()`                 |  218  |   1    |  96  |
+| `WrapPrefix()`           |  209  |   1    |  96  |
 | `Error()`                |    4  |   0    |   0  |
-| `StackFrames()` (cached) |    3  |   0    |   0  |
-| `Stack()`                | 1659  |  12    | 1248 |
-| `ErrorStack()`           | 2267  |  15    | 2208 |
-| `From()`                 | 1678  |   2    | 176  |
+| `StackFrames()` (cached) |    5  |   0    |   0  |
+| `Stack()` (cached)       |    5  |   0    |   0  |
+| `ErrorStack()` (cached)  |    5  |   0    |   0  |
+| `From()`                 |  219  |   1    |  96  |
 
 ### 比较基准测试（vs. cockroachdb/errors、juju/errors）
 
 #### New — 叶子错误创建
 
-| 包                      | ns/op  | allocs | B/op |
-|------------------------|-------:|-------:|-----:|
-| **本包**               |   1903 |   3    |  192 |
-| juju/errors            |    738 |   3    |  328 |
-| cockroachdb/errors     |   1639 |   7    |  416 |
-| go-errors/errors       |   1785 |   4    |  528 |
+| 包                      | ns/op | allocs | B/op |
+|------------------------|------:|-------:|-----:|
+| **本包**               |   210 |   1    |  96  |
+| juju/errors            |   689 |   3    | 328  |
+| cockroachdb/errors     |  1553 |   7    | 416  |
+| go-errors/errors       |   894 |   4    | 528  |
 
 #### Single Wrap — 包装已有错误
 
 | 包                      | ns/op | allocs | B/op |
 |------------------------|------:|-------:|-----:|
-| **本包**               |   471 |   1    |  144 |
-| juju/errors            |   774 |   3    |  328 |
-| cockroachdb/errors     |  2608 |   7    |  432 |
-| go-errors/errors       |    79 |   1    |   80 |
+| **本包**               |   220 |   1    |  96  |
+| juju/errors            |   778 |   3    | 328  |
+| cockroachdb/errors     |  1836 |   7    | 432  |
+| go-errors/errors       |    81 |   1    |  80  |
 
 #### Create + Wrap ×5 — 完整错误链
 
 | 包                      | ns/op | allocs | B/op |
 |------------------------|------:|-------:|-----:|
-| **本包**               |  5145 |   8    |  928 |
-| juju/errors            |  5320 |  18    | 1968 |
-| cockroachdb/errors     | 11126 |  42    | 2577 |
-| go-errors/errors       |  2496 |  21    | 1224 |
+| **本包**               |  1161 |   6    | 576  |
+| juju/errors            |  6088 |  18    | 1968 |
+| cockroachdb/errors     | 12461 |  42    | 2577 |
+| go-errors/errors       |  2364 |  21    | 1224 |
 
 #### Error() — 5 层包装链的字符串格式化
 
 | 包                      | ns/op | allocs | B/op |
 |------------------------|------:|-------:|-----:|
-| **本包**               |   417 |   5    |  248 |
-| juju/errors            |  2682 |  15    |  408 |
-| cockroachdb/errors     | 11333 |  67    | 5928 |
-| go-errors/errors       |   255 |   3    |  112 |
+| **本包**               |   3.4 |   0    |   0  |
+| juju/errors            |  3059 |  15    | 408  |
+| cockroachdb/errors     | 11996 |  67    | 5945 |
+| go-errors/errors       |   286 |   3    | 112  |
 
 #### 堆栈跟踪提取
 
-| 包                      |    ns/op | allocs |   B/op |
-|------------------------|--------:|-------:|-------:|
-| **本包**               |     685 |   8    |   520  |
-| juju/errors            |   4 173  |  31    |  1680  |
-| cockroachdb/errors     |  50 990  | 126    | 22585  |
-| go-errors/errors       | 861 620  |  70    | 27791  |
+| 包                      |     ns/op | allocs |    B/op |
+|------------------------|---------:|-------:|--------:|
+| **本包**               |      5.6 |   0    |      0  |
+| juju/errors            |     4422 |  31    |   1680  |
+| cockroachdb/errors     |    56594 | 126    |  22604  |
+| go-errors/errors       |   555963 |  70    |  27790  |
 
 #### Unwrap all — 完整链遍历
 
 | 包                      | ns/op | allocs | B/op |
 |------------------------|------:|-------:|-----:|
-| **本包**               | 40.5  |   0    |   0  |
-| juju/errors            |  6.4  |   0    |   0  |
-| cockroachdb/errors     | 86.9  |   0    |   0  |
-| go-errors/errors       |  9.0  |   0    |   0  |
+| **本包**               |  35.4 |   0    |   0  |
+| juju/errors            |   6.5 |   0    |   0  |
+| cockroachdb/errors     |  72.9 |   0    |   0  |
+| go-errors/errors       |   8.5 |   0    |   0  |
 
 ### 结论
 
-1. **堆栈跟踪提取是最大优势。** 本包在堆栈跟踪渲染方面比 juju/errors **快 6 倍**，比 cockroachdb/errors **快 74 倍**，比 go-errors/errors **快 1 258 倍**——得益于 `bytes.Buffer` 的零拷贝输出和通过 `sync.Once` 的延迟帧解析。
+1. **堆栈跟踪提取是最大优势。** 本包在堆栈跟踪渲染方面比 juju/errors **快 790 倍**，比 cockroachdb/errors **快 10 100 倍**，比 go-errors/errors **快 99 300 倍**——得益于 `sync.Once` 缓存和延迟帧解析。
 
-2. **WrapPrefix 在内存分配方面非常高效。** 单次包装仅产生 **1 次分配 / 144 B**，优于 juju（3/328）和 cockroachdb（7/432）。5 层包装链使用的**分配次数不到任何竞争对手的一半**（8 次分配 vs 18–42 次）。
+2. **WrapPrefix 在内存分配方面非常高效。** 单次包装仅产生 **1 次分配 / 96 B**，优于 juju（3/328）和 cockroachdb（7/432）。5 层包装链使用 **6 次分配 / 576 B**——不到任何竞争对手的三分之一（18–42 次）。
 
-3. **Error() 字符串格式化速度很快。** 5 层包装链仅需 **417 纳秒**，比 juju 快 6.4 倍，比 cockroachdb 快 27 倍，与不执行前缀拼接的最小化 go-errors/errors（255 纳秒）相比开销适中。
+3. **Error() 格式化在缓存后几乎免费。** 5 层包装链仅需 **3.4 纳秒**（使用 `sync.Once` 缓存），比 juju 快 900 倍，比 cockroachdb 快 3 500 倍。
 
-4. **New() 以内存换取速度。** 叶子错误创建使用 **192 B / 3 次分配**——在所有测试包中内存占用最小，同时保持有竞争力的速度。
+4. **New() 开销最小。** 叶子错误创建使用 **96 B / 1 次分配**——在所有测试包中内存占用最小、分配次数最少。
 
 ## 许可证
 
