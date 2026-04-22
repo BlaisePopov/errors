@@ -18,8 +18,9 @@
 //   - [Errorf] creates a formatted error with a stack trace
 //   - [ParsePanic] reconstructs an *[Error] from panic output text
 //
-// The [Error] type captures a full call stack at creation time. Stack frames
-// are resolved lazily on first access via [Error.StackFrames] or [Error.Stack].
+// The [Error] type captures a single program counter at each call site. Stack
+// traces are built by walking the error chain, resolving frames lazily on first
+// access via [Error.StackFrames] or [Error.Stack].
 //
 // Basic usage:
 //

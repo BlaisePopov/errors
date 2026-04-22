@@ -1,41 +1,11 @@
 package errors
 
 import (
-	"bytes"
 	"fmt"
 	"io"
-	"runtime"
 	"strings"
 	"testing"
 )
-
-// ---------------------------------------------------------------------------
-// Benchmarks
-// ---------------------------------------------------------------------------
-
-func BenchmarkStackFormat(b *testing.B) {
-	b.ReportAllocs()
-
-	for i := 0; i < b.N; i++ {
-		func() {
-			defer func() {
-				err := recover()
-				if err != 'a' {
-					b.Fatal(err)
-				}
-
-				e := Errorf("hi").(*Error)
-				_ = string(e.Stack())
-			}()
-
-			a()
-		}()
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Is / As
-// ---------------------------------------------------------------------------
 
 func TestIs(t *testing.T) {
 	t.Run("nil err", func(t *testing.T) {
@@ -122,64 +92,31 @@ func TestAs(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Stack traces
-// ---------------------------------------------------------------------------
+func TestStack_traceFromChain(t *testing.T) {
+	inner := fmt.Errorf("base")
+	wrapped := WrapPrefix(WrapPrefix(inner, "ctx1", 0), "ctx2", 0)
+	e := wrapped.(*Error)
 
-func TestStack(t *testing.T) {
-	t.Run("format matches runtime", func(t *testing.T) {
-		defer func() {
-			err := recover()
-			if err != 'a' {
-				t.Fatal(err)
-			}
+	frames := e.StackFrames()
+	if len(frames) != 2 {
+		t.Fatalf("expected 2 frames from chain, got %d", len(frames))
+	}
 
-			e, expected := Errorf("hi").(*Error), callers()
+	for _, f := range frames {
+		if f.File == "" || f.LineNumber == 0 {
+			t.Errorf("frame should have file/line, got File=%q Line=%d", f.File, f.LineNumber)
+		}
+		if !strings.HasSuffix(f.File, "errors_test.go") {
+			t.Errorf("frame file should end with errors_test.go, got %q", f.File)
+		}
+	}
 
-			bs := [][]uintptr{e.stack, expected}
-
-			if err := compareStacks(bs[0], bs[1]); err != nil {
-				t.Errorf("Stack didn't match")
-				t.Error(err.Error())
-			}
-
-			stack := string(e.Stack())
-
-			if !strings.Contains(stack, "a: b(5)") {
-				t.Errorf("Stack trace does not contain source line: 'a: b(5)'")
-				t.Error(stack)
-			}
-			if !strings.Contains(stack, "errors_test.go:") {
-				t.Errorf("Stack trace does not contain file name: 'errors_test.go:'")
-				t.Error(stack)
-			}
-		}()
-
-		a()
-	})
-
-	t.Run("skip parameter", func(t *testing.T) {
-		defer func() {
-			err := recover()
-			if err != 'a' {
-				t.Fatal(err)
-			}
-
-			bs := [][]uintptr{Wrap(fmt.Errorf("hi"), 2).(*Error).stack, callersSkip(2)}
-
-			if err := compareStacks(bs[0], bs[1]); err != nil {
-				t.Errorf("Stack didn't match")
-				t.Error(err.Error())
-			}
-		}()
-
-		a()
-	})
+	stack := string(e.Stack())
+	if !strings.Contains(stack, "errors_test.go:") {
+		t.Errorf("Stack trace does not contain file name: 'errors_test.go:'")
+		t.Error(stack)
+	}
 }
-
-// ---------------------------------------------------------------------------
-// New / From
-// ---------------------------------------------------------------------------
 
 func TestNew(t *testing.T) {
 	err := New("foo")
@@ -194,22 +131,25 @@ func TestNew(t *testing.T) {
 		t.Errorf("Wrong message")
 	}
 
-	bs := [][]uintptr{New("foo").(*Error).stack, callers()}
-
-	if err := compareStacks(bs[0], bs[1]); err != nil {
-		t.Errorf("Stack didn't match")
-		t.Error(err.Error())
+	e := err.(*Error)
+	if e.pc == 0 {
+		t.Errorf("New should capture a non-zero PC")
 	}
 
-	e := err.(*Error)
+	frames := e.StackFrames()
+	if len(frames) != 1 {
+		t.Errorf("expected 1 frame from New, got %d", len(frames))
+	}
+	if len(frames) > 0 {
+		if !strings.HasSuffix(frames[0].File, "errors_test.go") {
+			t.Errorf("frame file should end with errors_test.go, got %q", frames[0].File)
+		}
+	}
+
 	if e.ErrorStack() != e.TypeName()+" "+e.Error()+"\n"+string(e.Stack()) {
 		t.Errorf("ErrorStack is in the wrong format")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Wrap / WrapPrefix
-// ---------------------------------------------------------------------------
 
 func TestWrapError(t *testing.T) {
 	e := func() error {
@@ -235,10 +175,9 @@ func TestWrapError(t *testing.T) {
 
 func TestWrap_hasLocation(t *testing.T) {
 	err := Wrap(fmt.Errorf("test"), 0).(*Error)
-	// Wrap does not eagerly resolve location; it falls back via StackFrames.
 	file, line := err.Location()
 	if file == "" || line == 0 {
-		t.Errorf("Wrap should provide location (via StackFrames fallback), got file=%q line=%d", file, line)
+		t.Errorf("Wrap should provide location, got file=%q line=%d", file, line)
 	}
 	if !strings.HasSuffix(file, "errors_test.go") {
 		t.Errorf("Wrap location file should end with errors_test.go, got %q", file)
@@ -280,23 +219,16 @@ func TestWrapPrefixError(t *testing.T) {
 	}
 }
 
-func TestWrapPrefix_lightweight(t *testing.T) {
-	// WrapPrefix intentionally does NOT capture a full stack — only location.
-	// This keeps chained wrapping fast.
+func TestWrapPrefix_hasPC(t *testing.T) {
 	err := WrapPrefix(fmt.Errorf("base"), "ctx", 0).(*Error)
-	if len(err.Callers()) != 0 {
-		t.Errorf("WrapPrefix should NOT capture full stack, got %d callers", len(err.Callers()))
+	if err.pc == 0 {
+		t.Errorf("WrapPrefix should capture a PC")
 	}
-	// But it should have location.
 	file, line := err.Location()
 	if file == "" || line == 0 {
 		t.Errorf("WrapPrefix should have location, got file=%q line=%d", file, line)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// ErrUnsupported
-// ---------------------------------------------------------------------------
 
 func TestErrUnsupported(t *testing.T) {
 	if ErrUnsupported == nil {
@@ -307,10 +239,6 @@ func TestErrUnsupported(t *testing.T) {
 		t.Errorf("should match ErrUnsupported through wrapping")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Join / Unwrap
-// ---------------------------------------------------------------------------
 
 func TestJoin(t *testing.T) {
 	err1 := New("err1")
@@ -343,10 +271,6 @@ func TestUnwrap(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// StackFrames thread safety
-// ---------------------------------------------------------------------------
-
 func TestStackFrames_concurrent(t *testing.T) {
 	e := From(io.EOF)
 	var wg [10]chan struct{}
@@ -360,15 +284,10 @@ func TestStackFrames_concurrent(t *testing.T) {
 	for _, ch := range wg {
 		<-ch
 	}
-	// If we get here without a race detector complaint, we're good.
 	if len(e.StackFrames()) == 0 {
 		t.Errorf("expected non-empty stack frames")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// FuncName / LocationFunc backward compat
-// ---------------------------------------------------------------------------
 
 func TestFuncName(t *testing.T) {
 	e := From(io.EOF)
@@ -381,72 +300,27 @@ func TestFuncName(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-func a() error {
-	b(5)
-	return nil
-}
-
-func b(i int) {
-	c()
-}
-
-func c() {
-	panic('a')
-}
-
-// compareStacks compares a stack created using this package (actual) with a
-// reference stack created with the callers function (expected). The first
-// entry is not compared since the actual and expected stacks cannot be
-// created at the exact same program counter position, so the first entry
-// will always differ somewhat.
-func compareStacks(actual, expected []uintptr) error {
-	if len(actual) != len(expected) {
-		return stackCompareError("Stacks does not have equal length", actual, expected)
+func TestError_caching(t *testing.T) {
+	e := WrapPrefix(fmt.Errorf("base"), "ctx", 0).(*Error)
+	msg1 := e.Error()
+	msg2 := e.Error()
+	if msg1 != msg2 {
+		t.Errorf("cached Error() should return same value")
 	}
-	for i, pc := range actual {
-		if i != 0 && pc != expected[i] {
-			return stackCompareError(fmt.Sprintf("Stacks does not match entry %d (and maybe others)", i), actual, expected)
-		}
+	if msg1 != "ctx: base" {
+		t.Errorf("expected 'ctx: base', got %q", msg1)
 	}
-	return nil
 }
 
-func stackCompareError(msg string, actual, expected []uintptr) error {
-	return fmt.Errorf("%s\nActual stack trace:\n%s\nExpected stack trace:\n%s", msg, readableStackTrace(actual), readableStackTrace(expected))
-}
-
-func callers() []uintptr {
-	return callersSkip(1)
-}
-
-func callersSkip(skip int) []uintptr {
-	depth := getMaxStackDepth()
-	callers := make([]uintptr, depth)
-	length := runtime.Callers(skip+2, callers[:])
-	return callers[:length]
-}
-
-func readableStackTrace(callers []uintptr) string {
-	var result bytes.Buffer
-	frames := callersToFrames(callers)
-	for _, frame := range frames {
-		result.WriteString(fmt.Sprintf("%s:%d (%#x)\n\t%s\n", frame.File, frame.Line, frame.PC, frame.Function))
+func TestCallers(t *testing.T) {
+	e1 := WrapPrefix(WrapPrefix(fmt.Errorf("base"), "ctx1", 0), "ctx2", 0).(*Error)
+	pcs := e1.Callers()
+	if len(pcs) != 2 {
+		t.Errorf("expected 2 callers from chain, got %d", len(pcs))
 	}
-	return result.String()
-}
-
-func callersToFrames(callers []uintptr) []runtime.Frame {
-	frames := make([]runtime.Frame, 0, len(callers))
-	framesPtr := runtime.CallersFrames(callers)
-	for {
-		frame, more := framesPtr.Next()
-		frames = append(frames, frame)
-		if !more {
-			return frames
+	for _, pc := range pcs {
+		if pc == 0 {
+			t.Errorf("caller PC should not be zero")
 		}
 	}
 }
