@@ -9,7 +9,14 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
+
+const maxSourceCache = 256
+
+var showSourceLines = sync.OnceValue(func() bool {
+	return os.Getenv("GOERRORS_HIDE_SOURCE") == ""
+})
 
 // StackFrame contains all necessary information to generate a line in a
 // call stack trace.
@@ -68,6 +75,10 @@ func (f *StackFrame) String() string {
 	b.WriteString(strconv.FormatUint(uint64(f.ProgramCounter), 16))
 	b.WriteString(")\n")
 
+	if !showSourceLines() {
+		return b.String()
+	}
+
 	source, err := f.sourceLine()
 	if err != nil {
 		return b.String()
@@ -92,6 +103,7 @@ func (f *StackFrame) SourceLine() (string, error) {
 }
 
 var sourceLineCache sync.Map
+var sourceCacheCount atomic.Int64
 
 type sourceLineResult struct {
 	lines []string
@@ -117,6 +129,10 @@ func (f *StackFrame) sourceLine() (string, error) {
 
 	file, err := os.Open(f.File)
 	if err != nil {
+		if sourceCacheCount.Add(1) > maxSourceCache {
+			sourceLineCache.Clear()
+			sourceCacheCount.Store(0)
+		}
 		sourceLineCache.Store(key, &sourceLineResult{err: err})
 		return "", err
 	}
@@ -128,10 +144,18 @@ func (f *StackFrame) sourceLine() (string, error) {
 		lines = append(lines, string(bytes.Trim(scanner.Bytes(), " \t")))
 	}
 	if err := scanner.Err(); err != nil {
+		if sourceCacheCount.Add(1) > maxSourceCache {
+			sourceLineCache.Clear()
+			sourceCacheCount.Store(0)
+		}
 		sourceLineCache.Store(key, &sourceLineResult{err: err})
 		return "", err
 	}
 
+	if sourceCacheCount.Add(1) > maxSourceCache {
+		sourceLineCache.Clear()
+		sourceCacheCount.Store(0)
+	}
 	sourceLineCache.Store(key, &sourceLineResult{lines: lines})
 
 	if f.LineNumber >= 1 && f.LineNumber <= len(lines) {

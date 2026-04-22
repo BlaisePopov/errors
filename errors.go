@@ -7,46 +7,27 @@ import (
 	"reflect"
 	"runtime"
 	"sync"
-	"sync/atomic"
 )
 
 var ErrUnsupported = baseErrors.ErrUnsupported
 
-const slabSize = 1024
+const maxChainDepth = 128
 
-type errorSlab struct {
-	buf [slabSize]Error
-	idx atomic.Int64
+var errorPool = sync.Pool{
+	New: func() any { return &Error{} },
 }
 
-var globalSlab atomic.Pointer[errorSlab]
-
 func allocError() *Error {
-	for {
-		s := globalSlab.Load()
-		if s == nil {
-			ns := new(errorSlab)
-			if !globalSlab.CompareAndSwap(nil, ns) {
-				continue
-			}
-			s = ns
-		}
-		n := s.idx.Add(1)
-		if n <= slabSize {
-			return &s.buf[n-1]
-		}
-		ns := new(errorSlab)
-		if globalSlab.CompareAndSwap(s, ns) {
-			s = ns
-		}
-	}
+	e := errorPool.Get().(*Error)
+	*e = Error{}
+	return e
 }
 
 type Error struct {
 	Err       error
 	pc        uintptr
 	prefix    string
-	errCached uint32
+	errOnce   sync.Once
 	cachedErr string
 	once      sync.Once
 	data      *errorData
@@ -171,13 +152,10 @@ func (e *Error) Error() string {
 	if e.prefix == "" {
 		return e.Err.Error()
 	}
-	if atomic.LoadUint32(&e.errCached) != 0 {
-		return e.cachedErr
-	}
-	msg := e.prefix + ": " + e.Err.Error()
-	e.cachedErr = msg
-	atomic.StoreUint32(&e.errCached, 1)
-	return msg
+	e.errOnce.Do(func() {
+		e.cachedErr = e.prefix + ": " + e.Err.Error()
+	})
+	return e.cachedErr
 }
 
 func (e *Error) resolveLocation() {
@@ -215,7 +193,7 @@ func (e *Error) Stack() []byte {
 func (e *Error) Callers() []uintptr {
 	pcs := make([]uintptr, 0, 8)
 	current := e
-	for current != nil {
+	for i := 0; current != nil && i < maxChainDepth; i++ {
 		if current.pc != 0 {
 			pcs = append(pcs, current.pc)
 		}
@@ -250,7 +228,7 @@ func (e *Error) StackFrames() []StackFrame {
 		}
 		var chain []*Error
 		current := e
-		for current != nil {
+		for i := 0; current != nil && i < maxChainDepth; i++ {
 			chain = append(chain, current)
 			if inner, ok := current.Err.(*Error); ok {
 				current = inner

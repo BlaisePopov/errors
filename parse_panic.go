@@ -15,7 +15,13 @@ func (p uncaughtPanic) Error() string {
 // ParsePanic allows you to get an *Error from the output of a Go program
 // that panicked. This is particularly useful with
 // https://github.com/mitchellh/panicwrap.
+const maxPanicInput = 1 << 20
+const maxPanicFrames = 256
+
 func ParsePanic(text string) (*Error, error) {
+	if len(text) > maxPanicInput {
+		return nil, Errorf("errors.panicParser: input too large (%d bytes)", len(text))
+	}
 	lines := strings.Split(text, "\n")
 
 	state := "start"
@@ -62,6 +68,10 @@ func ParsePanic(text string) (*Error, error) {
 			}
 
 			stack = append(stack, *frame)
+			if len(stack) >= maxPanicFrames {
+				state = "done"
+				break
+			}
 			if createdBy {
 				state = "done"
 				break
