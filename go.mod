@@ -1,3 +1,3 @@
-module github.com/go-errors/errors
+module github.com/BlaisePopov/errors
 
 go 1.21

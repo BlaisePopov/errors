@@ -1,6 +1,6 @@
-# go-errors/errors
+# BlaisePopov/errors
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/go-errors/errors.svg)](https://pkg.go.dev/github.com/go-errors/errors)
+[![Go Reference](https://pkg.go.dev/badge/github.com/BlaisePopov/errors.svg)](https://pkg.go.dev/github.com/BlaisePopov/errors)
 
 **Languages:** [English](README.md) | [Русский](README.ru.md) | Español | [中文](README.zh.md)
 
@@ -32,7 +32,7 @@ Es un **reemplazo directo** del paquete estándar `errors`: basta con cambiar la
 ## Instalación
 
 ```bash
-go get github.com/go-errors/errors
+go get github.com/BlaisePopov/errors
 ```
 
 ## Inicio rápido
@@ -42,7 +42,7 @@ package main
 
 import (
     "fmt"
-    "github.com/go-errors/errors"
+    "github.com/BlaisePopov/errors"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -158,7 +158,7 @@ Resultados (Windows/amd64, Intel i5-8250U):
 
 ### Conclusiones
 
-1. **La extracción de traza de pila es la ventaja principal.** Este paquete es **790× más rápido** que juju/errors, **10 100× más rápido** que cockroachdb/errors y **99 300× más rápido** que go-errors/errors en el renderizado de trazas de pila — gracias a la caché con `sync.Once` y la resolución diferida de marcos.
+1. **La extracción de traza de pila es la ventaja principal.** Este paquete es **790× más rápido** que juju/errors, **10 100× más rápido** que cockroachdb/errors y **99 300× más rápido** que BlaisePopov/errors en el renderizado de trazas de pila — gracias a la caché con `sync.Once` y la resolución diferida de marcos.
 
 2. **WrapPrefix es eficiente en asignaciones.** Una sola envoltura produce solo **1 asignación / 96 B**, superando a juju (3/328) y cockroachdb (7/432). La cadena de 5 envolturas usa **6 asignaciones / 576 B** — menos de un tercio de las asignaciones de cualquier competidor (18–42).
 

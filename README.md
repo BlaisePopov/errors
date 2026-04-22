@@ -1,6 +1,6 @@
-# go-errors/errors
+# BlaisePopov/errors
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/go-errors/errors.svg)](https://pkg.go.dev/github.com/go-errors/errors)
+[![Go Reference](https://pkg.go.dev/badge/github.com/BlaisePopov/errors.svg)](https://pkg.go.dev/github.com/BlaisePopov/errors)
 
 **Languages:** English | [Русский](README.ru.md) | [Español](README.es.md) | [中文](README.zh.md)
 
@@ -35,7 +35,7 @@ work — but now `errors.New` and friends also capture a stack trace.
 ## Installation
 
 ```bash
-go get github.com/go-errors/errors
+go get github.com/BlaisePopov/errors
 ```
 
 ## Quick Start
@@ -45,7 +45,7 @@ package main
 
 import (
     "fmt"
-    "github.com/go-errors/errors"
+    "github.com/BlaisePopov/errors"
 )
 
 var ErrNotFound = errors.New("not found")

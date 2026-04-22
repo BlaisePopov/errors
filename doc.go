@@ -24,7 +24,7 @@
 //
 // Basic usage:
 //
-//	import "github.com/go-errors/errors"
+//	import "github.com/BlaisePopov/errors"
 //
 //	func doWork() error {
 //	    if err := riskyCall(); err != nil {

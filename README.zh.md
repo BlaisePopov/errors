@@ -1,6 +1,6 @@
-# go-errors/errors
+# BlaisePopov/errors
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/go-errors/errors.svg)](https://pkg.go.dev/github.com/go-errors/errors)
+[![Go Reference](https://pkg.go.dev/badge/github.com/BlaisePopov/errors.svg)](https://pkg.go.dev/github.com/BlaisePopov/errors)
 
 **Languages:** [English](README.md) | [Русский](README.ru.md) | [Español](README.es.md) | 中文
 
@@ -32,7 +32,7 @@
 ## 安装
 
 ```bash
-go get github.com/go-errors/errors
+go get github.com/BlaisePopov/errors
 ```
 
 ## 快速入门
@@ -42,7 +42,7 @@ package main
 
 import (
     "fmt"
-    "github.com/go-errors/errors"
+    "github.com/BlaisePopov/errors"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -158,7 +158,7 @@ func main() {
 
 ### 结论
 
-1. **堆栈跟踪提取是最大优势。** 本包在堆栈跟踪渲染方面比 juju/errors **快 790 倍**，比 cockroachdb/errors **快 10 100 倍**，比 go-errors/errors **快 99 300 倍**——得益于 `sync.Once` 缓存和延迟帧解析。
+1. **堆栈跟踪提取是最大优势。** 本包在堆栈跟踪渲染方面比 juju/errors **快 790 倍**，比 cockroachdb/errors **快 10 100 倍**，比 BlaisePopov/errors **快 99 300 倍**——得益于 `sync.Once` 缓存和延迟帧解析。
 
 2. **WrapPrefix 在内存分配方面非常高效。** 单次包装仅产生 **1 次分配 / 96 B**，优于 juju（3/328）和 cockroachdb（7/432）。5 层包装链使用 **6 次分配 / 576 B**——不到任何竞争对手的三分之一（18–42 次）。
 

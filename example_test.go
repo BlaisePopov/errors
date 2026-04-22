@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	errors "github.com/go-errors/errors"
+	errors "github.com/BlaisePopov/errors"
 )
 
 func ExampleNew() {
