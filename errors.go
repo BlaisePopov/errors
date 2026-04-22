@@ -7,48 +7,52 @@ import (
 	"reflect"
 	"runtime"
 	"sync"
+	"sync/atomic"
 )
 
 var ErrUnsupported = baseErrors.ErrUnsupported
 
-const slabSize = 256
+const slabSize = 1024
 
 type errorSlab struct {
 	buf [slabSize]Error
-	idx int
+	idx atomic.Int64
 }
 
-var errorArena = sync.Pool{
-	New: func() any { return new(errorSlab) },
-}
+var globalSlab atomic.Pointer[errorSlab]
 
 func allocError() *Error {
 	for {
-		slab, _ := errorArena.Get().(*errorSlab)
-		if slab == nil {
-			slab = new(errorSlab)
+		s := globalSlab.Load()
+		if s == nil {
+			ns := new(errorSlab)
+			if !globalSlab.CompareAndSwap(nil, ns) {
+				continue
+			}
+			s = ns
 		}
-		if slab.idx < slabSize {
-			e := &slab.buf[slab.idx]
-			slab.idx++
-			errorArena.Put(slab)
-			return e
+		n := s.idx.Add(1)
+		if n <= slabSize {
+			return &s.buf[n-1]
+		}
+		ns := new(errorSlab)
+		if globalSlab.CompareAndSwap(s, ns) {
+			s = ns
 		}
 	}
 }
 
 type Error struct {
-	Err    error
-	pc     uintptr
-	prefix string
-	once   sync.Once
-	data   *errorData
+	Err       error
+	pc        uintptr
+	prefix    string
+	errCached uint32
+	cachedErr string
+	once      sync.Once
+	data      *errorData
 }
 
 type errorData struct {
-	errOnce   sync.Once
-	cachedErr string
-
 	locOnce sync.Once
 	locFile string
 	locLine int
@@ -56,6 +60,12 @@ type errorData struct {
 
 	framesOnce sync.Once
 	frames     []StackFrame
+
+	stackOnce sync.Once
+	stack     []byte
+
+	errStackOnce sync.Once
+	errStack     string
 }
 
 func (e *Error) ensureData() *errorData {
@@ -161,11 +171,13 @@ func (e *Error) Error() string {
 	if e.prefix == "" {
 		return e.Err.Error()
 	}
-	d := e.ensureData()
-	d.errOnce.Do(func() {
-		d.cachedErr = e.prefix + ": " + e.Err.Error()
-	})
-	return d.cachedErr
+	if atomic.LoadUint32(&e.errCached) != 0 {
+		return e.cachedErr
+	}
+	msg := e.prefix + ": " + e.Err.Error()
+	e.cachedErr = msg
+	atomic.StoreUint32(&e.errCached, 1)
+	return msg
 }
 
 func (e *Error) resolveLocation() {
@@ -184,16 +196,20 @@ func (e *Error) resolveLocation() {
 }
 
 func (e *Error) Stack() []byte {
-	frames := e.StackFrames()
-	if len(frames) == 0 {
-		return nil
-	}
-	var buf bytes.Buffer
-	buf.Grow(len(frames) * 128)
-	for _, frame := range frames {
-		buf.WriteString(frame.String())
-	}
-	return buf.Bytes()
+	d := e.ensureData()
+	d.stackOnce.Do(func() {
+		frames := e.StackFrames()
+		if len(frames) == 0 {
+			return
+		}
+		var buf bytes.Buffer
+		buf.Grow(len(frames) * 128)
+		for _, frame := range frames {
+			buf.WriteString(frame.String())
+		}
+		d.stack = buf.Bytes()
+	})
+	return d.stack
 }
 
 func (e *Error) Callers() []uintptr {
@@ -213,13 +229,17 @@ func (e *Error) Callers() []uintptr {
 }
 
 func (e *Error) ErrorStack() string {
-	var buf bytes.Buffer
-	buf.WriteString(e.TypeName())
-	buf.WriteByte(' ')
-	buf.WriteString(e.Error())
-	buf.WriteByte('\n')
-	buf.Write(e.Stack())
-	return buf.String()
+	d := e.ensureData()
+	d.errStackOnce.Do(func() {
+		var buf bytes.Buffer
+		buf.WriteString(e.TypeName())
+		buf.WriteByte(' ')
+		buf.WriteString(e.Error())
+		buf.WriteByte('\n')
+		buf.Write(e.Stack())
+		d.errStack = buf.String()
+	})
+	return d.errStack
 }
 
 func (e *Error) StackFrames() []StackFrame {
